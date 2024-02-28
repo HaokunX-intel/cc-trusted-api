@@ -1,4 +1,4 @@
-module github.com/HaokunX-intel/cc-trusted-api/common/golang/cctrusted_base
+module github.com/cc-api/cc-trusted-api/common/golang/cctrusted_base
 
 go 1.22.0
 
