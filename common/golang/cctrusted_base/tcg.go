@@ -1,8 +1,6 @@
 package cctrusted_base
 
-type TcgEventFormat string
-type TcgEventType uint32
-type TCG_ALG int32
+type TCG_ALG uint32
 
 const (
 	TPM_ALG_ERROR  TCG_ALG = 0x0
@@ -47,10 +45,18 @@ var (
 	}
 )
 
-const (
-	TCG_PCCLIENT_FORMAT  TcgEventFormat = "tcg_pcclient"
-	TCG_CANONICAL_FORMAT TcgEventFormat = "tcg_canonical"
+type TcgEventFormat string
 
+const (
+	TCG_PCCLIENT_FORMAT TcgEventFormat = "tcg_pcclient"
+	TCG_CEL_TLV         TcgEventFormat = "tcg_cel_tlv"
+	TCG_CEL_JSON        TcgEventFormat = "tcg_cel_json"
+	TCG_CEL_CBOR        TcgEventFormat = "tcg_cel_cbor"
+)
+
+type TcgEventType uint32
+
+const (
 	EV_PREBOOT_CERT            TcgEventType = 0x0
 	EV_POST_CODE               TcgEventType = 0x1
 	EV_UNUSED                  TcgEventType = 0x2
@@ -181,4 +187,137 @@ func (t TcgEventType) String() string {
 		return "EV_EFI_SPDM_DEVICE_AUTHORITY"
 	}
 	return ""
+}
+
+type TcgCelType uint32
+
+const (
+	// TCG CEL top level event types
+	CEL_SEQNUM       TcgCelType = 0x00000000
+	CEL_PCR          TcgCelType = 0x00000001
+	CEL_NV_INDEX     TcgCelType = 0x00000002
+	CEL_DIGESTS      TcgCelType = 0x00000003
+	CEL_MGT          TcgCelType = 0x00000004
+	CEL_PCCLIENT_STD TcgCelType = 0x00000005
+	CEL_IMA_TEMPLATE TcgCelType = 0x00000007
+	CEL_IMA_TLV      TcgCelType = 0x00000008
+)
+
+func (t TcgCelType) String() string {
+	switch t {
+	case CEL_SEQNUM:
+		return "CEL_SEQNUM"
+	case CEL_PCR:
+		return "CEL_PCR"
+	case CEL_NV_INDEX:
+		return "CEL_NV_INDEX"
+	case CEL_DIGESTS:
+		return "CEL_DIGESTS"
+	case CEL_MGT:
+		return "CEL_MGT"
+	case CEL_PCCLIENT_STD:
+		return "CEL_PCCLIENT_STD"
+	case CEL_IMA_TEMPLATE:
+		return "CEL_IMA_TEMPLATE"
+	case CEL_IMA_TLV:
+		return "CEL_IMA_TLV"
+	}
+
+	return ""
+}
+
+type TcgCelMgtType uint32
+
+const (
+	CEL_MGT_TYPE                  TcgCelMgtType = 0
+	CEL_MGT_DATA                  TcgCelMgtType = 1
+	CEL_MGT_CEL_VERSION           TcgCelMgtType = 1
+	CEL_MGT_CEL_VERSION_MAJOR     TcgCelMgtType = 0
+	CEL_MGT_CEL_VERSION_MINOR     TcgCelMgtType = 1
+	CEL_MGT_FIRMWARE_END          TcgCelMgtType = 2
+	CEL_MGT_CEL_TIMESTAMP         TcgCelMgtType = 80
+	CEL_MGT_STATE_TRANS           TcgCelMgtType = 81
+	CEL_MGT_STATE_TRANS_SUSPEND   TcgCelMgtType = 0
+	CEL_MGT_STATE_TRANS_HIBERNATE TcgCelMgtType = 1
+	CEL_MGT_STATE_TRANS_KEXEC     TcgCelMgtType = 2
+)
+
+type TcgCelImaTLVType uint32
+
+const (
+	IMA_TLV_PATH      TcgCelImaTLVType = 0
+	IMA_TLV_DATAHASH  TcgCelImaTLVType = 1
+	IMA_TLV_DATASIG   TcgCelImaTLVType = 2
+	IMA_TLV_OWNER     TcgCelImaTLVType = 3
+	IMA_TLV_GROUP     TcgCelImaTLVType = 4
+	IMA_TLV_MODE      TcgCelImaTLVType = 5
+	IMA_TLV_TIMESTAMP TcgCelImaTLVType = 6
+	IMA_TLV_LABEL     TcgCelImaTLVType = 7
+)
+
+func (t TcgCelImaTLVType) String() string {
+	switch t {
+	case IMA_TLV_PATH:
+		return "IMA_TLV_PATH"
+	case IMA_TLV_DATAHASH:
+		return "IMA_TLV_DATAHASH"
+	case IMA_TLV_DATASIG:
+		return "IMA_TLV_DATASIG"
+	case IMA_TLV_OWNER:
+		return "IMA_TLV_OWNER"
+	case IMA_TLV_GROUP:
+		return "IMA_TLV_GROUP"
+	case IMA_TLV_MODE:
+		return "IMA_TLV_MODE"
+	case IMA_TLV_TIMESTAMP:
+		return "IMA_TLV_TIMESTAMP"
+	case IMA_TLV_LABEL:
+		return "IMA_TLV_LABEL"
+	}
+	return ""
+}
+
+type TcgCelImaTemplateType uint32
+
+const (
+	// IMA_TEMPLATE specific content types
+	IMA_TEMPLATE_NAME TcgCelImaTemplateType = 0
+	IMA_TEMPLATE_DATA TcgCelImaTemplateType = 1
+)
+
+func (t TcgCelImaTemplateType) String() string {
+	switch t {
+	case IMA_TEMPLATE_NAME:
+		return "IMA_TEMPLATE_NAME"
+	case IMA_TEMPLATE_DATA:
+		return "IMA_TEMPLATE_DATA"
+	}
+
+	return ""
+}
+
+type TcgCelPcClientStdType uint32
+
+const (
+	// PCCLIENT_STD content types
+	PCCLIENT_STD_TYPE    TcgCelPcClientStdType = 0
+	PCCLIENT_STD_CONTENT TcgCelPcClientStdType = 1
+)
+
+func (t TcgCelPcClientStdType) String() string {
+	switch t {
+	case PCCLIENT_STD_TYPE:
+		return "PCCLIENT_STD_TYPE"
+	case PCCLIENT_STD_CONTENT:
+		return "PCCLIENT_STD_CONTENT"
+	}
+	return ""
+}
+
+type FormatedTcgEvent interface {
+	Dump()
+	GetFormatType() TcgEventFormat
+	GetImrIndex() uint32
+	GetEventType() TcgEventType
+	GetDigests() []TcgDigest
 }

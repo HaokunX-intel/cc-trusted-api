@@ -34,8 +34,8 @@ func (p *TcgEventLogParser) Format(format TcgEventFormat) FormatedTcgEvent {
 	switch format {
 	case TCG_PCCLIENT_FORMAT:
 		return p.formatTcgPCClient()
-	case TCG_CANONICAL_FORMAT:
-		return p.formatTcgCanonical()
+	case TCG_CEL_TLV, TCG_CEL_JSON, TCG_CEL_CBOR:
+		return p.formatTcgCanonical(format)
 	}
 	return nil
 }
@@ -64,112 +64,36 @@ func (p *TcgEventLogParser) formatTcgPCClient() FormatedTcgEvent {
 	}
 }
 
-func (p *TcgEventLogParser) formatTcgCanonical() FormatedTcgEvent {
-	// TODO: canonical format
-	return nil
-}
+func (p *TcgEventLogParser) formatTcgCanonical(format TcgEventFormat) FormatedTcgEvent {
 
-type FormatedTcgEvent interface {
-	Dump()
-	GetFormatType() TcgEventFormat
-	GetImrIndex() uint32
-	GetEventType() TcgEventType
-	GetDigests() []TcgDigest
-}
-
-var _ FormatedTcgEvent = (*TcgImrEvent)(nil)
-
-type TcgImrEvent struct {
-	ImrIndex   uint32
-	EventType  TcgEventType
-	Digests    []TcgDigest
-	EventSize  uint32
-	Event      []byte
-	FormatType TcgEventFormat
-}
-
-// GetDigests implements FormatedTcgEvent.
-func (e *TcgImrEvent) GetDigests() []TcgDigest {
-	return e.Digests
-}
-
-// GetEventType implements FormatedTcgEvent.
-func (e *TcgImrEvent) GetEventType() TcgEventType {
-	return e.EventType
-}
-
-// GetImrIndex implements FormatedTcgEvent.
-func (e *TcgImrEvent) GetImrIndex() uint32 {
-	return e.ImrIndex
-}
-
-// FormatType implements FormatedTcgEvent.
-func (e *TcgImrEvent) GetFormatType() TcgEventFormat {
-	return e.FormatType
-}
-
-// Dump implements FormatedTcgEvent.
-func (e *TcgImrEvent) Dump() {
-	l := log.Default()
-	l.Println("----------------------------------Event Log Entry---------------------------------")
-	l.Printf("IMR               : %d\n", e.ImrIndex)
-	l.Printf("Type              : 0x%X (%v)\n", uint32(e.EventType), e.EventType)
-	count := 0
-	for _, digest := range e.Digests {
-		l.Printf("Algorithm_id[%d]   : %d (%v) \n", count, digest.AlgID, digest.AlgID)
-		l.Printf("Digest[%d]:\n", count)
-		digestBlob := NewBinaryBlob(digest.Hash, 0)
-		digestBlob.Dump()
-		count += 1
+	switch format {
+	case TCG_CEL_TLV:
+		return p.formatTcgTpmCelTLV()
+	default:
+		// TODO: support json and cbor
 	}
-	l.Println("Event:")
-	eventBlob := NewBinaryBlob(e.Event, 0)
-	eventBlob.Dump()
-}
-
-var _ FormatedTcgEvent = (*TcgPcClientImrEvent)(nil)
-
-type TcgPcClientImrEvent struct {
-	ImrIndex      uint32
-	EventType     TcgEventType
-	Digest        [20]byte
-	EventDataSize uint32
-	Event         []byte
-	FormatType    TcgEventFormat
-}
-
-// GetDigests implements FormatedTcgEvent.
-func (e *TcgPcClientImrEvent) GetDigests() []TcgDigest {
 	return nil
 }
 
-// GetEventType implements FormatedTcgEvent.
-func (e *TcgPcClientImrEvent) GetEventType() TcgEventType {
-	return e.EventType
-}
+func (p *TcgEventLogParser) formatTcgTpmCelTLV() FormatedTcgEvent {
+	var contentType TcgCelType
+	var contentData TcgTpmsEvent
+	if p.EventType == IMA_MEASUREMENT_EVENT {
+		contentType = CEL_IMA_TEMPLATE
+		contentData = &TcgTpmsEventImaTemplate{
+			Name: p.ExtraInfo["template_name"],
+			Data: p.Event,
+		}
+	} else {
+		contentType = CEL_PCCLIENT_STD
+		contentData = &TcgTpmsEventPcClientStd{
+			Type: p.EventType,
+			Data: p.Event,
+		}
+	}
 
-// GetImrIndex implements FormatedTcgEvent.
-func (e *TcgPcClientImrEvent) GetImrIndex() uint32 {
-	return e.ImrIndex
-}
-
-// FormatType implements FormatedTcgEvent.
-func (e *TcgPcClientImrEvent) GetFormatType() TcgEventFormat {
-	return e.FormatType
-}
-
-// Dump implements FormatedTcgEvent.
-func (e *TcgPcClientImrEvent) Dump() {
-	l := log.Default()
-	l.Println("--------------------Header Specification ID Event--------------------------")
-	l.Printf("IMR               : %d\n", e.ImrIndex)
-	l.Printf("Type              : 0x%X (%v) \n", uint32(e.EventType), e.EventType)
-	l.Println("Digest:")
-	digestBlob := NewBinaryBlob(e.Digest[:], 0)
-	digestBlob.Dump()
-	l.Println("Event:")
-	eventBlob := NewBinaryBlob(e.Event, 0)
-	eventBlob.Dump()
+	return NewTcgTpmCelEventTLV(p.RecNum, p.Digests,
+		true, p.ImrIndex, 0, contentType, contentData)
 }
 
 type TcgEfiSpecIdEventAlgorithmSize struct {
@@ -323,58 +247,13 @@ func ReplayFormatedEventLog(formatedEventLogs []FormatedTcgEvent) map[int]map[TC
 
 func (l *EventLogger) Replay() map[int]map[TCG_ALG][]byte {
 	return ReplayFormatedEventLog(l.tcgEventLogs)
-	// ret := make(map[int]map[TCG_ALG][]byte, 0)
-	// lg := log.Default()
-	// for _, event := range l.tcgEventLogs {
-	// 	if !l.isSupportedFormat(event) {
-	// 		lg.Println("event with unknown format. Skip this one...")
-	// 		continue
-	// 	}
-	// 	if event.GetEventType() == EV_NO_ACTION {
-	// 		continue
-	// 	}
-
-	// 	idx := int(event.GetImrIndex())
-	// 	if _, ok := ret[idx]; !ok {
-	// 		ret[idx] = make(map[TCG_ALG][]byte, 0)
-	// 	}
-
-	// 	for _, digest := range event.GetDigests() {
-	// 		var hash hash.Hash
-	// 		alg := digest.AlgID
-	// 		switch alg {
-	// 		case TPM_ALG_SHA1:
-	// 			hash = sha1.New()
-	// 		case TPM_ALG_SHA384:
-	// 			hash = sha512.New384()
-	// 		case TPM_ALG_SHA256:
-	// 			hash = sha256.New()
-	// 		case TPM_ALG_SHA512:
-	// 			hash = sha512.New()
-	// 		default:
-	// 			lg.Printf("Unsupported hash algorithm  %v\n", alg)
-	// 			continue
-	// 		}
-
-	// 		val := make([]byte, TPM_ALG_HASH_DIGEST_SIZE_TABLE[alg])
-	// 		if b, ok := ret[idx][alg]; !ok {
-	// 			ret[idx][alg] = make([]byte, 0)
-	// 		} else {
-	// 			val = b
-	// 		}
-	// 		hash.Write(append(val, digest.Hash...))
-	// 		ret[idx][alg] = hash.Sum(nil)
-	// 	}
-
-	// }
-	// return ret
 }
 
 func isSupportedFormat(e FormatedTcgEvent) bool {
 	switch e.GetFormatType() {
 	case TCG_PCCLIENT_FORMAT:
 		fallthrough
-	case TCG_CANONICAL_FORMAT:
+	case TCG_CEL_TLV, TCG_CEL_JSON, TCG_CEL_CBOR:
 		return true
 	}
 	return false
@@ -625,7 +504,7 @@ func (l *EventLogger) parseIMALog() error {
 
 		recNum := l.getRecordNumber(parser.ImrIndex)
 		parser.RecNum = recNum
-		l.tcgEventLogs = append(l.tcgEventLogs, parser.Format(l.eventFormat))
+		l.tcgEventLogs = append(l.tcgEventLogs, parser.Format(TCG_CEL_TLV))
 	}
 	return nil
 }
